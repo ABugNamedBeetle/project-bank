@@ -12,7 +12,7 @@ import org.springframework.web.bind.annotation.RequestParam;
 @RestController
 public class UtilityController {
     @GetMapping("health")
-    public Map<String, String> getHealth(@RequestParam String param) {
+    public Map<String, String> getHealth() {
         return Map.of("status", "OK", "time", LocalDateTime.now().toString());
     }
     

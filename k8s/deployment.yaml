@@ -1,0 +1,194 @@
+# =========================
+# PostgreSQL Deployment
+# =========================
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: postgres
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: postgres
+  template:
+    metadata:
+      labels:
+        app: postgres
+    spec:
+      containers:
+        - name: postgres
+          image: postgres:16
+          ports:
+            - containerPort: 5432
+          env:
+            - name: POSTGRES_DB
+              value: appdb
+            - name: POSTGRES_USER
+              value: appuser
+            - name: POSTGRES_PASSWORD
+              value: apppassword
+          volumeMounts:
+            - name: postgres-data
+              mountPath: /var/lib/postgresql/data
+      volumes:
+        - name: postgres-data
+          hostPath:
+            path: /home/arpit/redpog/data/postgres
+            type: DirectoryOrCreate
+
+---
+# =========================
+# PostgreSQL Service
+# =========================
+apiVersion: v1
+kind: Service
+metadata:
+  name: postgres
+spec:
+  type: ClusterIP
+  selector:
+    app: postgres
+  ports:
+    - port: 5432
+      targetPort: 5432
+
+---
+# =========================
+# Redis Deployment
+# =========================
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: redis
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: redis
+  template:
+    metadata:
+      labels:
+        app: redis
+    spec:
+      containers:
+        - name: redis
+          image: redis:7
+          ports:
+            - containerPort: 6379
+          command: ["redis-server", "--appendonly", "yes"]
+          volumeMounts:
+            - name: redis-data
+              mountPath: /data
+      volumes:
+        - name: redis-data
+          emptyDir: {}
+
+---
+# =========================
+# Redis Service
+# =========================
+apiVersion: v1
+kind: Service
+metadata:
+  name: redis
+spec:
+  type: ClusterIP
+  selector:
+    app: redis
+  ports:
+    - port: 6379
+      targetPort: 6379
+
+---
+# =========================
+# ConfigMap for Bank App
+# =========================
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: bank-app-config
+data:
+  application.properties: |
+    # Paste your application.properties content here
+    # Example:
+    # PostgreSQL
+    spring.datasource.url=jdbc:postgresql://postgres:5432/appdb?options=-c%20TimeZone=Asia/Kolkata
+    spring.datasource.username=appuser
+    spring.datasource.password=apppassword
+    spring.jpa.hibernate.ddl-auto=update
+    spring.jpa.show-sql=true
+
+    spring.datasource.driver-class-name=org.postgresql.Driver
+    spring.jpa.database-platform=org.hibernate.dialect.PostgreSQLDialect
+
+    spring.jpa.properties.hibernate.default_schema=public
+    spring.jpa.properties.hibernate.jdbc.time_zone=Asia/Kolkata
+
+    # Redis
+    spring.data.redis.host=redis
+    spring.data.redis.port=6379
+
+    spring.output.ansi.enabled=always
+
+---
+# =========================
+# Bank App Deployment
+# =========================
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: bank-app
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: bank-app
+  template:
+    metadata:
+      labels:
+        app: bank-app
+    spec:
+      containers:
+        - name: bank-app
+          image: 192.168.9.132:5000/redpog-app:latest   # your local image
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 8080
+          volumeMounts:
+            - name: config-volume
+              mountPath: /app/application.properties
+              subPath: application.properties
+      volumes:
+        - name: config-volume
+          configMap:
+            name: bank-app-config
+
+---
+# =========================
+# Bank App Service
+# =========================
+apiVersion: v1
+kind: Service
+metadata:
+  name: bank-app-cluster-ip
+spec:
+  type: ClusterIP
+  selector:
+    app: bank-app
+  ports:
+    - port: 8080
+      targetPort: 8080
+---
+
+apiVersion: v1
+kind: Service
+metadata:
+  name: bank-app-node-ip
+spec:
+  type: NodePort
+  selector:
+    app: bank-app
+  ports:
+    - port: 8080
+      targetPort: 8080
+      nodePort: 30080   # external port on nod

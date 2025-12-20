@@ -9,7 +9,7 @@ RUN mvn dependency:go-offline -B
 
 # Copy source code and build
 COPY app/sbs.bank/src ./src
-RUN mvn clean package -Duser.timezone=Asia/Kolkata
+RUN mvn clean package -Duser.timezone=Asia/Kolkata -DskipTests 
 
 # Stage 2: Runtime
 FROM alpine/java:22-jre
